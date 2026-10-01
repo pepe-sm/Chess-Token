@@ -62,5 +62,21 @@ class TestMaiaEngineServer(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn("already over", response.json()["detail"])
 
+    def test_tactical_defense_scholars_mate(self):
+        # White threatens Qxf7# with Queen on f3 and Bishop on c4
+        threat_fen = "r1bqkb1r/pppp1ppp/2n5/4p3/2B1P3/5Q2/PPPP1PPP/RNB1K1NR b KQkq - 3 3"
+        board = chess.Board(threat_fen)
+        uci_move, san_move, eval_val = select_move_for_elo(board, 1500)
+        # Legal defenses: Qe7, Qf6, Nf6, Nh6, d5
+        defending_moves = ["e8e7", "d8f6", "d8e7", "g8f6", "g8h6", "d7d5"]
+        self.assertIn(uci_move, defending_moves, f"Engine played {uci_move} ({san_move}) which allows Scholar's Mate!")
+
+    def test_find_mate_in_one(self):
+        # White has Qxf7#
+        mate_in_one_fen = "r1bqkb1r/pppp1ppp/2n5/4p3/2B1P3/5Q2/PPPP1PPP/RNB1K1NR w KQkq - 4 4"
+        board = chess.Board(mate_in_one_fen)
+        uci_move, san_move, eval_val = select_move_for_elo(board, 1900)
+        self.assertEqual(uci_move, "f3f7", f"Engine failed to play mate in 1: played {uci_move} ({san_move})")
+
 if __name__ == "__main__":
     unittest.main()

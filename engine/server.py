@@ -42,7 +42,7 @@ PIECE_VALUES = {
 
 # Position-square tables for human-like positional awareness
 PAWN_TABLE = [
-    0,  0,  0,  0,  0,  0,  0,  0,
+     0,  0,  0,  0,  0,  0,  0,  0,
     50, 50, 50, 50, 50, 50, 50, 50,
     10, 10, 20, 30, 30, 20, 10, 10,
      5,  5, 10, 25, 25, 10,  5,  5,
@@ -63,26 +63,119 @@ KNIGHT_TABLE = [
     -50,-40,-30,-30,-30,-30,-40,-50,
 ]
 
+BISHOP_TABLE = [
+    -20,-10,-10,-10,-10,-10,-10,-20,
+    -10,  0,  0,  0,  0,  0,  0,-10,
+    -10,  0,  5, 10, 10,  5,  0,-10,
+    -10,  5,  5, 10, 10,  5,  5,-10,
+    -10,  0, 10, 10, 10, 10,  0,-10,
+    -10, 10, 10, 10, 10, 10, 10,-10,
+    -10,  5,  0,  0,  0,  0,  5,-10,
+    -20,-10,-10,-10,-10,-10,-10,-20,
+]
+
+ROOK_TABLE = [
+      0,  0,  0,  0,  0,  0,  0,  0,
+      5, 10, 10, 10, 10, 10, 10,  5,
+     -5,  0,  0,  0,  0,  0,  0, -5,
+     -5,  0,  0,  0,  0,  0,  0, -5,
+     -5,  0,  0,  0,  0,  0,  0, -5,
+     -5,  0,  0,  0,  0,  0,  0, -5,
+     -5,  0,  0,  0,  0,  0,  0, -5,
+      0,  0,  0,  5,  5,  0,  0,  0,
+]
+
+QUEEN_TABLE = [
+    -20,-10,-10, -5, -5,-10,-10,-20,
+    -10,  0,  0,  0,  0,  0,  0,-10,
+    -10,  0,  5,  5,  5,  5,  0,-10,
+     -5,  0,  5,  5,  5,  5,  0, -5,
+      0,  0,  5,  5,  5,  5,  0, -5,
+    -10,  5,  5,  5,  5,  5,  0,-10,
+    -10,  0,  5,  0,  0,  0,  0,-10,
+    -20,-10,-10, -5, -5,-10,-10,-20,
+]
+
+KING_TABLE_MID = [
+    -30,-40,-40,-50,-50,-40,-40,-30,
+    -30,-40,-40,-50,-50,-40,-40,-30,
+    -30,-40,-40,-50,-50,-40,-40,-30,
+    -30,-40,-40,-50,-50,-40,-40,-30,
+    -20,-30,-30,-40,-40,-30,-30,-20,
+    -10,-20,-20,-20,-20,-20,-20,-10,
+     20, 20,  0,  0,  0,  0, 20, 20,
+     20, 30, 10,  0,  0, 10, 30, 20,
+]
+
+KING_TABLE_END = [
+    -50,-40,-30,-20,-20,-30,-40,-50,
+    -30,-20,-10,  0,  0,-10,-20,-30,
+    -30,-10, 20, 30, 30, 20,-10,-30,
+    -30,-10, 30, 40, 40, 30,-10,-30,
+    -30,-10, 30, 40, 40, 30,-10,-30,
+    -30,-10, 20, 30, 30, 20,-10,-30,
+    -30,-30,  0,  0,  0,  0,-30,-30,
+    -50,-30,-30,-30,-30,-30,-30,-50,
+]
+
+# Standard master opening book responses
+OPENING_BOOK: Dict[str, List[str]] = {
+    "": ["e2e4", "d2d4", "c2c4", "g1f3"],
+    "e2e4": ["e7e5", "c7c5", "e7e6", "c7c6"],
+    "e2e4 e7e5": ["g1f3", "f1c4", "b1c3"],
+    "e2e4 e7e5 g1f3": ["b8c6", "g8f6"],
+    "e2e4 e7e5 g1f3 b8c6": ["f1c4", "f1b5", "d2d4"],
+    "e2e4 c7c5": ["g1f3", "b1c3", "c2c3"],
+    "e2e4 c7c5 g1f3": ["d7d6", "e7e6", "b8c6"],
+    "d2d4": ["d7d5", "g8f6", "e7e6"],
+    "d2d4 d7d5": ["c2c4", "g1f3"],
+    "d2d4 d7d5 c2c4": ["e7e6", "c7c6", "d5c4"],
+    "d2d4 g8f6": ["c2c4", "g1f3", "c1g5"],
+}
+
+def is_endgame(board: "chess.Board") -> bool:
+    """Endgame detected when both queens are gone or major pieces are depleted."""
+    white_queen = bool(board.pieces(chess.QUEEN, chess.WHITE))
+    black_queen = bool(board.pieces(chess.QUEEN, chess.BLACK))
+    if not white_queen and not black_queen:
+        return True
+    white_pieces = len(board.pieces(chess.ROOK, chess.WHITE)) + len(board.pieces(chess.KNIGHT, chess.WHITE)) + len(board.pieces(chess.BISHOP, chess.WHITE))
+    black_pieces = len(board.pieces(chess.ROOK, chess.BLACK)) + len(board.pieces(chess.KNIGHT, chess.BLACK)) + len(board.pieces(chess.BISHOP, chess.BLACK))
+    return white_pieces <= 2 and black_pieces <= 2
+
 def evaluate_board(board: "chess.Board") -> int:
-    """Evaluates material and basic positional factors from White's perspective."""
+    """Evaluates material and deep positional factors from moving turn perspective."""
     if not CHESS_AVAILABLE:
         return 0
     if board.is_checkmate():
-        return -99999 if board.turn == chess.WHITE else 99999
-    if board.is_stalemate() or board.is_insufficient_material():
+        return -99999
+    if board.is_stalemate() or board.is_insufficient_material() or board.can_claim_draw():
         return 0
 
+    endgame = is_endgame(board)
     score = 0
+
     for square in chess.SQUARES:
         piece = board.piece_at(square)
         if not piece:
             continue
         val = PIECE_VALUES.get(piece.piece_type, 0)
         pos_bonus = 0
+
+        sq_idx = square if piece.color == chess.WHITE else chess.square_mirror(square)
+
         if piece.piece_type == chess.PAWN:
-            pos_bonus = PAWN_TABLE[square] if piece.color == chess.WHITE else PAWN_TABLE[chess.square_mirror(square)]
+            pos_bonus = PAWN_TABLE[sq_idx]
         elif piece.piece_type == chess.KNIGHT:
-            pos_bonus = KNIGHT_TABLE[square] if piece.color == chess.WHITE else KNIGHT_TABLE[chess.square_mirror(square)]
+            pos_bonus = KNIGHT_TABLE[sq_idx]
+        elif piece.piece_type == chess.BISHOP:
+            pos_bonus = BISHOP_TABLE[sq_idx]
+        elif piece.piece_type == chess.ROOK:
+            pos_bonus = ROOK_TABLE[sq_idx]
+        elif piece.piece_type == chess.QUEEN:
+            pos_bonus = QUEEN_TABLE[sq_idx]
+        elif piece.piece_type == chess.KING:
+            pos_bonus = KING_TABLE_END[sq_idx] if endgame else KING_TABLE_MID[sq_idx]
 
         total_piece_val = val + pos_bonus
         if piece.color == chess.WHITE:
@@ -90,39 +183,126 @@ def evaluate_board(board: "chess.Board") -> int:
         else:
             score -= total_piece_val
 
-    return score
+    # Return relative to whose turn it is (Negamax convention)
+    return score if board.turn == chess.WHITE else -score
+
+def score_move(board: "chess.Board", move: "chess.Move") -> int:
+    """Move ordering heuristic: MVV-LVA (Most Valuable Victim, Least Valuable Aggressor)."""
+    if board.is_capture(move):
+        victim = board.piece_at(move.to_square)
+        victim_val = PIECE_VALUES.get(victim.piece_type, 100) if victim else 100
+        aggressor = board.piece_at(move.from_square)
+        aggressor_val = PIECE_VALUES.get(aggressor.piece_type, 100) if aggressor else 100
+        return 10000 + (10 * victim_val) - aggressor_val
+    if move.promotion:
+        return 9000
+    if board.gives_check(move):
+        return 8000
+    return 0
+
+def quiescence(board: "chess.Board", alpha: int, beta: int, depth: int = 3) -> int:
+    """Quiescence search to evaluate capture sequences and resolve the horizon effect."""
+    stand_pat = evaluate_board(board)
+    if depth <= 0:
+        return stand_pat
+    if stand_pat >= beta:
+        return beta
+    if alpha < stand_pat:
+        alpha = stand_pat
+
+    capture_moves = [m for m in board.legal_moves if board.is_capture(m) or m.promotion]
+    if not capture_moves:
+        return stand_pat
+
+    capture_moves.sort(key=lambda m: score_move(board, m), reverse=True)
+
+    for move in capture_moves:
+        board.push(move)
+        score = -quiescence(board, -beta, -alpha, depth - 1)
+        board.pop()
+
+        if score >= beta:
+            return beta
+        if score > alpha:
+            alpha = score
+
+    return alpha
+
+def alpha_beta(board: "chess.Board", depth: int, alpha: int, beta: int) -> int:
+    """Negamax search with Alpha-Beta pruning."""
+    if depth <= 0:
+        return quiescence(board, alpha, beta)
+
+    if board.is_checkmate():
+        return -90000 - depth
+    if board.is_stalemate() or board.is_insufficient_material() or board.can_claim_draw():
+        return 0
+
+    legal_moves = list(board.legal_moves)
+    legal_moves.sort(key=lambda m: score_move(board, m), reverse=True)
+
+    for move in legal_moves:
+        board.push(move)
+        score = -alpha_beta(board, depth - 1, -beta, -alpha)
+        board.pop()
+
+        if score >= beta:
+            return beta
+        if score > alpha:
+            alpha = score
+
+    return alpha
 
 def select_move_for_elo(board: "chess.Board", elo: int) -> tuple[str, str, int]:
     """
-    Selects a move simulating human play at the specified Maia ELO bracket (1100, 1500, 1900).
-    Blunder probability and positional depth are calibrated to human blunder profiles.
+    Selects a tactical, strategically sound move calibrated to ELO level (1100, 1500, 1900).
+    Uses Opening Book -> Alpha-Beta Search -> Quiescence to ensure realistic, challenging gameplay.
     """
     legal_moves = list(board.legal_moves)
     if not legal_moves:
         raise ValueError("No legal moves available in this position.")
 
-    scored_moves: List[tuple[chess.Move, int]] = []
-    is_white = board.turn == chess.WHITE
+    # 1. Opening Book lookup
+    move_stack_uci = " ".join(m.uci() for m in board.move_stack)
+    if move_stack_uci in OPENING_BOOK:
+        candidates = [m for m in OPENING_BOOK[move_stack_uci] if chess.Move.from_uci(m) in board.legal_moves]
+        if candidates:
+            chosen_uci = random.choice(candidates)
+            chosen_move = chess.Move.from_uci(chosen_uci)
+            return chosen_uci, board.san(chosen_move), 0
 
-    # 1-ply / 2-ply search for candidate moves
+    # 2. Calibration by ELO
+    if elo <= 1200:
+        depth = 2
+        noise_range = 35
+        blunder_prob = 0.08
+    elif elo <= 1600:
+        depth = 3
+        noise_range = 10
+        blunder_prob = 0.01
+    else:  # 1900+
+        depth = 4
+        noise_range = 0
+        blunder_prob = 0.0
+
+    scored_moves: List[tuple[chess.Move, int]] = []
+    legal_moves.sort(key=lambda m: score_move(board, m), reverse=True)
+
     for move in legal_moves:
         board.push(move)
-        eval_score = evaluate_board(board)
+        score = -alpha_beta(board, depth - 1, -100000, 100000)
         board.pop()
-        scored_moves.append((move, eval_score))
 
-    # Sort from perspective of moving side
-    scored_moves.sort(key=lambda x: x[1], reverse=is_white)
+        if noise_range > 0:
+            score += random.randint(-noise_range, noise_range)
 
-    # Blunder and inaccuracy rate simulation matching Maia human research:
-    # Maia 1100: ~30% chance of making an inaccurate or blunder move
-    # Maia 1500: ~12% chance of sub-optimal move
-    # Maia 1900: ~3% chance of sub-optimal move
-    blunder_chance = 0.30 if elo <= 1200 else (0.12 if elo <= 1600 else 0.03)
+        scored_moves.append((move, score))
 
-    if random.random() < blunder_chance and len(scored_moves) > 1:
-        top_candidates = scored_moves[:min(5, len(scored_moves))]
-        chosen_move, eval_val = random.choice(top_candidates)
+    scored_moves.sort(key=lambda x: x[1], reverse=True)
+
+    # In ELO 1100, occasional slight sub-optimal choice from top 3 moves
+    if blunder_prob > 0 and random.random() < blunder_prob and len(scored_moves) > 1:
+        chosen_move, eval_val = random.choice(scored_moves[:min(3, len(scored_moves))])
     else:
         chosen_move, eval_val = scored_moves[0]
 
